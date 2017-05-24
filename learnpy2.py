@@ -44,12 +44,12 @@ SV = 0
 BAYES = 0
 RF = 0
 GP = 0
-MLP = 1
+MLP = 0
 KERAS = 0
 LASAGNE = 0
 
 #10км
-normalize=10000 
+NORMALIZE=10000 
 
 data = pd.read_csv('C:/Users/danil/Desktop/plundra/drivers_5000_edges.csv')
 
@@ -138,55 +138,74 @@ def PrintTest(est, calibrate=True):
     plt.show()
     
 def postProcessing(y_proba):
-    
-    print("startSHIOT")
     i=0
-    resFrame=pd.DataFrame(columns=['prob'])
+    resFrame=[]
     while i<(len(y_proba)):
-        print ("i=")
-        print (i)
-        print ("j=")
         trueEdgesProbs = []
         j=X_TEST.iloc[i,0]   
-        print(j)#.at[i,'Driver']
+        #пробегаем по всем водителям, развёрнутым по сегментам
         while i<len(y_proba) and j==X_TEST.iloc[i,0] :
-            if(X_TEST.iloc[i,9]<10000):
+            #X_TEST.iloc[i,9]-distance  X_TEST.iloc[i,10]-accidentBin
+            if(X_TEST.iloc[i,9]>10000 or X_TEST.iloc[i,10]==1):
+                trueEdgesProbs.append(y_proba[i])
+            #если отрезок меньше 10км и на нем не было аварии, 
+            #то апроксимируем его вероятность до 10 км
+            else:
                 koef=10000//X_TEST.iloc[i,9]
                 tmp=1-y_proba[i]
                 noAccidentsProb=pow(tmp,koef)
                 EdgeAccidentProb=1-noAccidentsProb
                 trueEdgesProbs.append(EdgeAccidentProb)
-            else:
-                trueEdgesProbs.append(y_proba[i])
             i+=1
             
         routeProb=1
+        #в списке trueEdgesProbs находятся требуемые вероятности, которые можно свернуть в маршрут
+        # с помощью умножения вероятностей
         for edgeProb in trueEdgesProbs:
+            #получаем вероятность непопадания в аварию на всём маршруте
             routeProb*=(1-edgeProb)
+        #и наоборот
         routeProb=1-routeProb
-        resFrame.loc[i]=routeProb
+        resFrame.append(routeProb)
                 
-    return resFrame
+    return np.array(resFrame)
     
+def postProcessingYtest(y_proba):
+    # то же самое, для y_test
+    i=0
+    trueEdgesProbs = []
+    while i<(len(y_proba)):
+        j=X_TEST.iloc[i,0]   
+        flag=False
+        while i<len(y_proba) and j==X_TEST.iloc[i,0] :
+            if(X_TEST.iloc[i,10]==1):
+                flag=true
+            i+=1        
+        if(flag):
+            trueEdgesProbs.append(1)
+        else:
+            trueEdgesProbs.append(0)
+    return np.array(trueEdgesProbs)
     
+#Y_TEST,Y_PROBA1,Y_PROBA2- вероятности свёрнутые по маршрутам
 def Compete(y_proba1, y_proba2=y_lr, margin1=1, margin2=1):
-    print(len(X_TEST))
-    X_TEST['AccidentsBin']=y_proba1
+
+    #добавляем колонки, чтобы отсортировать dataframe по водителям
+    X_TEST['AccidentsProb1']=y_proba1
+    X_TEST['AccidentsProb2']=y_proba2
+    X_TEST['AccidentsBin']=y_test
     X_TEST.sort_values(['Driver'], inplace=True)
-    print('DDDDDDDDDDDDD')
-    print(y_proba1.shape)
-    print(y_proba2.shape)
-    y_proba1=postProcessing(y_proba1)
-    y_proba2=postProcessing(y_proba2)
-    print(y_proba1.shape)
-    print(y_proba2.shape)
-    print("postProcessing ended")
-    premium1 = y_proba1 * margin1
-    premium2 = y_proba2 * margin2
+    #передаем колонки y_proba1 y_proba2 y_test в постобработку
+    Y_PROBA1=postProcessing(X_TEST.loc[:, 'AccidentsProb1'].as_matrix())
+    Y_PROBA2=postProcessing(X_TEST.loc[:, 'AccidentsProb2'].as_matrix())
+    Y_TEST=postProcessingYtest(X_TEST.loc[:, 'AccidentsBin'].as_matrix())
+
+    premium1 = Y_PROBA1 * margin1
+    premium2 = Y_PROBA2 * margin2
     selector1 = premium1 < premium2
     selector2 = premium2 < premium1
-    profit1 = premium2 - y_test
-    profit2 = premium1 - y_test
+    profit1 = premium2 - Y_TEST #надо свернуть по маршрутам
+    profit2 = premium1 - Y_TEST
     average_profit = np.sum(np.select([selector1], [profit1])) / np.sum(selector1)
     deals = np.sum(selector1) / selector1.shape[0]
     print('1. Profit (average): ', average_profit, ', Profit (total): ', average_profit * deals, ', Deals: ', deals)
