@@ -48,10 +48,10 @@ MLP = 1
 KERAS = 0
 LASAGNE = 0
 
-
+#10км
 normalize=10000 
 
-data = pd.read_csv('drivers_5000_edges.csv')
+data = pd.read_csv('C:/Users/danil/Desktop/plundra/drivers_5000_edges.csv')
 
 data.at[data['Accidents'] > 0, 'AccidentsBin'] = 1
 data.at[data['Accidents'] == 0, 'AccidentsBin'] = 0
@@ -136,10 +136,12 @@ def PrintTest(est, calibrate=True):
 
     plt.tight_layout()
     plt.show()
-#Постобработка   
+    
 def postProcessing(y_proba):
+    
+    print("startSHIOT")
     i=0
-    resFrame=pd.DataFrame()
+    resFrame=pd.DataFrame(columns=['prob'])
     while i<(len(y_proba)):
         print ("i=")
         print (i)
@@ -162,8 +164,8 @@ def postProcessing(y_proba):
         for edgeProb in trueEdgesProbs:
             routeProb*=(1-edgeProb)
         routeProb=1-routeProb
-        resFrame.iloc[0,i]   =routeProb
-        #здесь неправильно добавляются вероятности в датафрейм
+        resFrame.loc[i]=routeProb
+                
     return resFrame
     
     
